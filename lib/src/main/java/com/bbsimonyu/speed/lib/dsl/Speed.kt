@@ -3,6 +3,7 @@
 package com.bbsimonyu.speed.lib.dsl
 
 import android.animation.Animator
+import android.animation.ValueAnimator
 import android.graphics.PointF
 import android.view.View
 import androidx.lifecycle.Lifecycle
@@ -16,7 +17,6 @@ import com.bbsimonyu.speed.lib.*
  */
 
 /**
- * Hold the view's animation
  */
 class Speed : LifecycleObserver {
     internal lateinit var view: View
@@ -78,17 +78,67 @@ class Speeds {
     }
 }
 
-open class Motion : CanMotion, Initial<UnitValue> {
-    override lateinit var duration: UnitValue
-    override lateinit var speed: UnitValue
-    override lateinit var initial: UnitValue
-    override lateinit var distance: UnitValue
-    override lateinit var acceleration: UnitValue
+open class Motion : HasMotion, Initial<UnitValue> {
+    override var duration: UnitValue? = null
+    override var speed: UnitValue? = null
+    override var initial: UnitValue? = null
+    override var distance: UnitValue? = null
+    override var acceleration: UnitValue? = null
 }
 
-class Rotate : Motion(), CanPivot, CanDirection, Apply {
+class Rotate : Motion(), HasPivot, HasDirection, Apply {
     override fun apply(view: View): Animator {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        val initialValue = initial?.normalize(view) ?: view.rotation
+        speed?.let { s ->
+            // speed is set
+            val speedValue = s.normalize(view)
+            duration?.let { dur ->
+                val durationValue = dur.normalize(view)
+                val distanceValue = speedValue * dur.normalize(view)
+                return ValueAnimator.ofFloat(initialValue, initialValue + distanceValue).apply {
+                    duration = durationValue.toLong()
+                }
+            } ?: run {
+                // duration not set
+                distance?.let { dis ->
+                    // distance set
+                    val distanceValue = dis.normalize(view)
+                    val durationValue = distanceValue / speedValue
+                    return ValueAnimator.ofFloat(initialValue, initialValue + distanceValue).apply {
+                        duration = durationValue.toLong()
+                    }
+                } ?: run {
+                    // distance not set
+                    val distanceValue = Float.MAX_VALUE
+                    val durationValue = (distanceValue - initialValue) / speedValue
+                    return ValueAnimator.ofFloat(initialValue, initialValue + distanceValue).apply {
+                        duration = durationValue.toLong()
+                    }
+                }
+            }
+        } ?: run {
+            // speed not set
+            duration?.let {  dur ->
+                val durationValue = dur.normalize(view)
+                distance?.let { dis ->
+                    val distanceValue = dis.normalize(view)
+                    return ValueAnimator.ofFloat(initialValue, initialValue + distanceValue).apply {
+                        duration = durationValue.toLong()
+                    }
+                } ?: run { // distance not set
+                    throw RuntimeException()
+                }
+            } ?: run { // duration not set
+                distance?.let { dis ->
+                    val distanceValue = dis.normalize(view)
+                    return ValueAnimator.ofFloat(initialValue, initialValue + distanceValue).apply {
+                        duration = configure.defaultDuration.toLong()
+                    }
+                } ?: run { // distance not set
+                    throw RuntimeException()
+                }
+            }
+        }
     }
 
     override lateinit var pivot: PointF
@@ -96,7 +146,7 @@ class Rotate : Motion(), CanPivot, CanDirection, Apply {
     override lateinit var direction: Direction
 }
 
-class Translation : Motion(), CanDirection, Apply {
+class Translation : Motion(), HasDirection, Apply {
     override fun apply(view: View): Animator {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
@@ -104,7 +154,7 @@ class Translation : Motion(), CanDirection, Apply {
     override lateinit var direction: Direction
 }
 
-class Visibility : Motion(), CanDirection, Apply {
+class Visibility : Motion(), HasDirection, Apply {
     override fun apply(view: View): Animator {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
@@ -138,7 +188,7 @@ class TranslationSet {
     }
 }
 
-class ScaleSet : CanPivot {
+class ScaleSet : HasPivot {
     override lateinit var pivot: PointF
     private var x: Scale? = null
     private var y: Scale? = null
@@ -158,7 +208,7 @@ class ScaleSet : CanPivot {
     }
 }
 
-class Scale : Motion(), CanDirection, Apply {
+class Scale : Motion(), HasDirection, Apply {
     override lateinit var direction: Direction
 
     override fun apply(view: View): Animator {
@@ -168,26 +218,25 @@ class Scale : Motion(), CanDirection, Apply {
 }
 
 interface Initial<T> {
-    var initial: UnitValue
+    var initial: UnitValue?
 }
 
-interface CanPivot {
+interface HasPivot {
     var pivot: PointF
 }
 
-interface CanDirection {
+interface HasDirection {
     var direction: Direction
 }
 
 /**
  * Define properties that can be used by a motion
  */
-interface CanMotion {
-    var duration: UnitValue
-    var speed: UnitValue
-    var initial: UnitValue
-    var distance: UnitValue
-    var acceleration: UnitValue
+interface HasMotion {
+    var duration: UnitValue?
+    var speed: UnitValue?
+    var distance: UnitValue?
+    var acceleration: UnitValue?
 }
 
 interface Apply {
